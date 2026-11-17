@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="MailMind"/>
+<meta name="theme-color" content="#6c63ff"/>
+<title>MailMind</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css"/>
+<style>
+:root{
+  --bg:#0f0f13;--surface:#16161f;--border:#22222e;--border2:#2e2e3e;
+  --text:#e2e2f0;--muted:#666;--accent:#6c63ff;--accent2:#a78bfa;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bot:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.app{display:flex;flex-direction:column;height:100%}
+/* Top bar */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:calc(var(--safe-top) + 12px) 16px 12px;border-bottom:1px solid var(--border);background:var(--bg);z-index:100}
+.logo{font-size:1.1rem;font-weight:800;display:flex;align-items:center;gap:8px}
+.logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--border2)}
+/* Nav */
+.bottomnav{display:flex;border-top:1px solid var(--border);background:var(--bg);padding:8px 0 calc(var(--safe-bot) + 8px)}
+.navbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.6rem;color:var(--muted);border:none;background:none;cursor:pointer;padding:4px;transition:color .2s}
+.navbtn.active{color:var(--accent2)}
+.navbtn .ni{font-size:1.3rem}
+/* Scroll */
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+/* Panels */
+.panel{display:none;padding:16px}
+.panel.active{display:block}
+/* Section title */
+.sec{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin:16px 0 10px}
+/* Event card */
+.ecard{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:9px;display:flex;gap:12px}
+.ecard-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.ecard-body{flex:1;min-width:0}
+.ecard-title{font-weight:600;font-size:.93rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ecard-desc{font-size:.78rem;color:var(--muted);margin:3px 0 7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.4}
+.ecard-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.badge{padding:2px 8px;border-radius:20px;font-size:.68rem;font-weight:700;text-transform:uppercase}
+.date-tag{font-size:.75rem;color:var(--muted)}
+.date-tag.soon{color:#ffa559}.date-tag.urgent{color:#ff6b6b}
+.exam-ic{background:#ff6b6b22}.deadline-ic{background:#ffa55922}
+.assignment-ic{background:#ffd43b22}.event-ic{background:#74c0fc22}
+.meeting-ic{background:#69db7c22}.other-ic{background:#a78bfa22}
+.badge-exam{background:#ff6b6b22;color:#ff6b6b}.badge-deadline{background:#ffa55922;color:#ffa559}
+.badge-assignment{background:#ffd43b22;color:#ffd43b}.badge-event{background:#74c0fc22;color:#74c0fc}
+.badge-meeting{background:#69db7c22;color:#69db7c}.badge-other{background:#a78bfa22;color:#a78bfa}
+/* Schedule slot */
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .2s}
+.scard:hover{border-color:var(--border2)}
+.scard.done{opacity:.45}
+.scard-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;transition:all .2s}
+.scard.done .scard-check{background:var(--accent);border-color:var(--accent);color:#fff}
+.scard-body{flex:1;min-width:0}
+.scard-title{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scard-time{font-size:.75rem;color:var(--muted);margin-top:2px}
+.scard-type{font-size:.68rem;padding:2px 7px;border-radius:10px;background:#6c63ff22;color:var(--accent2);flex-shrink:0}
+/* Calendar */
+#calendarEl{background:var(--surface);border-radius:16px;padding:12px;border:1px solid var(--border)}
+.fc{color:var(--text)!important;font-family:inherit!important}
+.fc-toolbar-title{font-size:1rem!important;font-weight:700!important}
+.fc-button{background:var(--surface)!important;border-color:var(--border2)!important;color:var(--text)!important;border-radius:8px!important;font-size:.8rem!important}
+.fc-button-active,.fc-button:focus{background:var(--accent)!important;border-color:var(--accent)!important;box-shadow:none!important}
+.fc-daygrid-day{background:var(--bg)!important}
+.fc-daygrid-day.fc-day-today{background:#6c63ff11!important}
+.fc-col-header-cell{background:var(--surface)!important;font-size:.75rem!important;color:var(--muted)!important}
+.fc-event{border-radius:5px!important;border:none!important;font-size:.72rem!important;cursor:pointer}
+.fc-daygrid-event-dot{display:none}
+.fc-popover{background:var(--surface)!important;border-color:var(--border)!important;border-radius:12px!important}
+/* Scan bar */
+.scanbar{display:flex;gap:8px;margin-bottom:16px}
+.scanbar select{flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;color:var(--text);font-size:.85rem;outline:none}
+.scanbtn{padding:10px 20px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s}
+.scanbtn:disabled{opacity:.5}
+/* Chips */
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:6px;margin-bottom:12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:6px 13px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:.78rem;font-weight:600;cursor:pointer}
+.chip.active{background:#6c63ff22;border-color:var(--accent);color:var(--accent2)}
+/* Profile */
+.profile-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.profile-card img{width:52px;height:52px;border-radius:50%}
+.profile-card h2{font-size:1rem;font-weight:700}
+.profile-card p{font-size:.82rem;color:var(--muted);margin-top:2px}
+/* Empty */
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty .ei{font-size:2.5rem;margin-bottom:12px}
+.empty h3{font-size:.95rem;color:#888;margin-bottom:6px}
+.empty p{font-size:.82rem;line-height:1.5}
+/* Spinner */
+.spinner{width:28px;height:28px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Toast */
+.toast{position:fixed;bottom:calc(var(--safe-bot)+72px);left:50%;transform:translateX(-50%) translateY(10px);background:#1e1e2a;border:1px solid var(--border2);border-radius:11px;padding:10px 18px;font-size:.82rem;opacity:0;transition:all .25s;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:#ff4d4d44;color:#ff7070}
+/* Btn */
+.btn{padding:9px 18px;border-radius:10px;font-size:.85rem;font-weight:600;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--muted)}
+.btn-danger{background:#ff4d4d18;border:1px solid #ff4d4d44;color:#ff7070}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="topbar">
+  <div class="logo"><div class="logo-icon">📬</div>MailMind</div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:.8rem;color:var(--muted)" id="lastScanLabel"></span>
+    {% if user.picture %}<img src="{{ user.picture }}" class="avatar" alt=""/>{% endif %}
+  </div>
+</div>
+
+<div class="scroll" id="scrollArea">
+
+  <!-- EVENTS panel -->
+  <div class="panel active" id="panel-events">
+    <div class="scanbar">
+      <select id="daysSelect">
+        <option value="14">Last 14 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="60">Last 60 days</option>
+        <option value="90">Last 3 months</option>
+      </select>
+      <button class="scanbtn" id="scanBtn" onclick="doScan()">🔍 Scan</button>
+    </div>
+    <div class="chips" id="filterChips" style="display:none">
+      <button class="chip active" onclick="filterBy('all',this)">All</button>
+      <button class="chip" onclick="filterBy('exam',this)">📝 Exams</button>
+      <button class="chip" onclick="filterBy('deadline',this)">⏰ Deadlines</button>
+      <button class="chip" onclick="filterBy('assignment',this)">📚 Assignments</button>
+      <button class="chip" onclick="filterBy('event',this)">📅 Events</button>
+      <button class="chip" onclick="filterBy('meeting',this)">🤝 Meetings</button>
+    </div>
+    <div id="eventsArea">
+      <div class="empty"><div class="ei">📬</div><h3>Tap Scan to get started</h3><p>MailMind will scan your Gmail and extract upcoming events automatically.</p></div>
+    </div>
+  </div>
+
+  <!-- CALENDAR panel -->
+  <div class="panel" id="panel-calendar">
+    <div id="calendarEl"></div>
+  </div>
+
+  <!-- SCHEDULE panel -->
+  <div class="panel" id="panel-schedule">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="sec" style="margin:0">Auto-generated prep schedule</div>
+      <button class="btn btn-ghost" style="font-size:.78rem;padding:7px 12px" onclick="reschedule()">🔄 Rebuild</button>
+    </div>
+    <div id="scheduleArea">
+      <div class="empty"><div class="ei">🗓️</div><h3>No schedule yet</h3><p>Scan your emails first to auto-generate a preparation schedule.</p></div>
+    </div>
+  </div>
+
+  <!-- PROFILE panel -->
+  <div class="panel" id="panel-profile">
+    <div class="profile-card">
+      {% if user.picture %}<img src="{{ user.picture }}" alt=""/>{% endif %}
+      <div>
+        <h2>{{ user.name or user.email }}</h2>
+        <p>{{ user.email }}</p>
+      </div>
+    </div>
+    <div class="sec">Account</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;font-size:.85rem;color:var(--muted);line-height:1.6">
+      🔒 <strong style="color:var(--text)">Your emails are never read by AI.</strong><br/>
+      All scanning uses local pattern matching. Email content never leaves your browser session.
+    </div>
+    <a href="/logout" class="btn btn-danger" style="width:100%;justify-content:center;text-decoration:none;margin-top:8px">Sign out</a>
+  </div>
+
+</div>
+
+<!-- Bottom nav -->
+<div class="bottomnav">
+  <button class="navbtn active" id="nav-events" onclick="showPanel('events')"><span class="ni">📋</span>Events</button>
+  <button class="navbtn" id="nav-calendar" onclick="showPanel('calendar')"><span class="ni">📅</span>Calendar</button>
+  <button class="navbtn" id="nav-schedule" onclick="showPanel('schedule')"><span class="ni">🗓️</span>Schedule</button>
+  <button class="navbtn" id="nav-profile" onclick="showPanel('profile')"><span class="ni">👤</span>Profile</button>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script>
+// ── Utils ──────────────────────────────────────────────────────────────────
+const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+let toastT;
+function toast(msg, err=false){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.className="toast show"+(err?" err":"");
+  clearTimeout(toastT); toastT=setTimeout(()=>t.className="toast",2800);
+}
+function daysUntil(d){
+  const now=new Date();now.setHours(0,0,0,0);
+  return Math.ceil((new Date(d)-now)/86400000);
+}
+function fmtDate(d,t){
+  if(!d) return "TBD";
+  const dt=new Date(d);
+  const s=dt.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"});
+  return t?`${s} · ${t}`:s;
+}
+
+// ── Panels ─────────────────────────────────────────────────────────────────
+let calInited=false;
+function showPanel(name){
+  ["events","calendar","schedule","profile"].forEach(p=>{
+    document.getElementById("panel-"+p).classList.toggle("active",p===name);
+    document.getElementById("nav-"+p).classList.toggle("active",p===name);
+  });
+  document.getElementById("scrollArea").scrollTop=0;
+  if(name==="calendar" && !calInited){initCalendar();calInited=true;}
+  if(name==="schedule") loadSchedule();
+}
+
+// ── Events ─────────────────────────────────────────────────────────────────
+const TICON={exam:"📝",deadline:"⏰",assignment:"📚",event:"📅",meeting:"🤝",other:"📌"};
+let allEvents=[];
+
+function renderEvents(evs){
+  const el=document.getElementById("eventsArea");
+  if(!evs.length){el.innerHTML=`<div class="empty"><div class="ei">🎉</div><h3>No upcoming events found</h3><p>Try a longer date range or check if your emails mention specific dates.</p></div>`;return;}
+  const urgent=[],soon=[],later=[];
+  evs.forEach(e=>{const d=daysUntil(e.date);if(d<=2)urgent.push(e);else if(d<=7)soon.push(e);else later.push(e);});
+  const section=(t,arr)=>arr.length?`<div class="sec">${t}</div>`+arr.map(ecard).join(""):"";
+  el.innerHTML=section("🔴 Urgent",urgent)+section("🟡 This week",soon)+section("📅 Upcoming",later);
+}
+
+function ecard(e){
+  const typ=(e.type||"other"),icon=TICON[typ]||"📌";
+  const d=daysUntil(e.date);
+  const dCls="date-tag"+(d<=2?" urgent":d<=7?" soon":"");
+  const dl=d===0?" · Today!":d===1?" · Tomorrow!":`· ${d}d`;
+  return `<div class="ecard"><div class="ecard-icon ${typ}-ic">${icon}</div><div class="ecard-body">
+    <div class="ecard-title">${esc(e.title)}</div>
+    <div class="ecard-desc">${esc(e.description)}</div>
+    <div class="ecard-meta"><span class="badge badge-${typ}">${typ}</span><span class="${dCls}">📅 ${fmtDate(e.date,e.time)} ${dl}</span></div>
+  </div></div>`;
+}
+
+function filterBy(type,btn){
+  document.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
+  btn.classList.add("active");
+  renderEvents(type==="all"?allEvents:allEvents.filter(e=>e.type===type));
+}
+
+async function doScan(){
+  const btn=document.getElementById("scanBtn"),days=document.getElementById("daysSelect").value;
+  btn.disabled=true;btn.textContent="⏳";
+  document.getElementById("filterChips").style.display="none";
+  document.getElementById("eventsArea").innerHTML=`<div class="empty"><div class="spinner"></div><p>Scanning emails…<br/><small style="color:var(--muted)">No content leaves your account</small></p></div>`;
+  try{
+    const r=await fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:+days})});
+    const d=await r.json();
+    if(d.error){toast(d.error,true);document.getElementById("eventsArea").innerHTML="";return;}
+    toast(`✓ ${d.found} event${d.found!==1?"s":""} found in ${d.scanned} emails`);
+    await loadEvents();
+    if(calInited){calendar.refetchEvents();}
+  }catch(e){toast("Error. Try again.",true);}
+  finally{btn.disabled=false;btn.textContent="🔍 Scan";}
+}
+
+async function loadEvents(){
+  const r=await fetch("/api/events");
+  allEvents=await r.json();
+  document.getElementById("filterChips").style.display=allEvents.length?"flex":"none";
+  document.querySelectorAll(".chip").forEach((c,i)=>c.classList.toggle("active",i===0));
+  renderEvents(allEvents);
+}
+
+// ── Calendar ───────────────────────────────────────────────────────────────
+let calendar;
+function initCalendar(){
+  calendar=new FullCalendar.Calendar(document.getElementById("calendarEl"),{
+    initialView: window.innerWidth<600?"listMonth":"dayGridMonth",
+    headerToolbar:{left:"prev,next",center:"title",right:"dayGridMonth,listMonth"},
+    themeSystem:"standard",
+    events:"/api/calendar",
+    eventClick(info){
+      const p=info.event.extendedProps;
+      if(p.kind==="slot") toggleSlot(p.slot_id,info.event);
+      else toast(p.description||info.event.title);
+    },
+    height:"auto",
+    eventDisplay:"block",
+  });
+  calendar.render();
+}
+
+async function toggleSlot(slotId,fcEvent){
+  const r=await fetch(`/api/slot/${slotId}/done`,{method:"POST"});
+  const d=await r.json();
+  fcEvent.setProp("title",(d.done?"✓ ":"")+fcEvent.title.replace(/^✓ /,""));
+  toast(d.done?"Marked done ✓":"Unmarked");
+}
+
+// ── Schedule ───────────────────────────────────────────────────────────────
+async function loadSchedule(){
+  const el=document.getElementById("scheduleArea");
+  const r=await fetch("/api/schedule");
+  const slots=await r.json();
+  if(!slots.length){el.innerHTML=`<div class="empty"><div class="ei">🗓️</div><h3>No schedule yet</h3><p>Scan your emails first.</p></div>`;return;}
+  // Group by date
+  const byDate={};
+  slots.forEach(s=>{(byDate[s.date]=byDate[s.date]||[]).push(s);});
+  let html="";
+  for(const [date,slotList] of Object.entries(byDate)){
+    const d=daysUntil(date);
+    const label=d===0?"Today":d===1?"Tomorrow":new Date(date).toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short"});
+    html+=`<div class="sec">${label}</div>`;
+    slotList.forEach(s=>{
+      html+=`<div class="scard${s.done?" done":""}" id="scard-${s.id}" onclick="toggleSchedSlot(${s.id})">
+        <div class="scard-check">${s.done?"✓":""}</div>
+        <div class="scard-body">
+          <div class="scard-title">${esc(s.label)}</div>
+          <div class="scard-time">🕐 ${s.start_time} – ${s.end_time}</div>
+        </div>
+        <span class="scard-type">${s.slot_type}</span>
+      </div>`;
+    });
+  }
+  el.innerHTML=html;
+}
+
+async function toggleSchedSlot(id){
+  const r=await fetch(`/api/slot/${id}/done`,{method:"POST"});
+  const d=await r.json();
+  const el=document.getElementById("scard-"+id);
+  if(el){el.classList.toggle("done",d.done);el.querySelector(".scard-check").textContent=d.done?"✓":"";}
+  if(calInited) calendar.refetchEvents();
+}
+
+async function reschedule(){
+  toast("Rebuilding schedule…");
+  await fetch("/api/reschedule",{method:"POST"});
+  await loadSchedule();
+  if(calInited) calendar.refetchEvents();
+  toast("Schedule updated ✓");
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadEvents();
+</script>
+</body>
+</html>
