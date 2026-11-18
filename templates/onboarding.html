@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#6c63ff"/>
+<title>MailMind — Setup</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f13;color:#e2e2f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#16161f;border:1px solid #22222e;border-radius:20px;padding:32px;max-width:480px;width:100%}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.logo-icon{width:38px;height:38px;background:linear-gradient(135deg,#6c63ff,#a78bfa);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.logo-text{font-size:1.3rem;font-weight:800}
+h2{font-size:1.3rem;font-weight:800;margin-bottom:8px}
+p{font-size:.9rem;color:#888;line-height:1.5;margin-bottom:24px}
+.step{display:flex;align-items:center;gap:10px;background:#0f0f13;border:1px solid #22222e;border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:.85rem;color:#aaa}
+.step-icon{font-size:1.1rem;width:28px;text-align:center;flex-shrink:0}
+label{display:block;font-size:.8rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.input-row{display:flex;gap:8px;margin-bottom:10px}
+input[type=text]{flex:1;background:#0f0f13;border:1px solid #2e2e3e;border-radius:10px;padding:10px 14px;color:#e2e2f0;font-size:.9rem;outline:none}
+input[type=text]:focus{border-color:#6c63ff}
+input[type=text]::placeholder{color:#444}
+.add-btn{padding:10px 16px;background:#6c63ff22;border:1px solid #6c63ff55;color:#a78bfa;border-radius:10px;font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap}
+.tags{display:flex;flex-wrap:wrap;gap:7px;min-height:36px;margin-bottom:20px}
+.tag{padding:5px 12px;background:#6c63ff22;border:1px solid #6c63ff44;border-radius:20px;font-size:.8rem;color:#a78bfa;display:flex;align-items:center;gap:6px}
+.tag .rm{cursor:pointer;color:#666;font-size:.9rem}
+.tag .rm:hover{color:#ff6b6b}
+.hint{font-size:.75rem;color:#555;margin-bottom:20px;line-height:1.5}
+.cta{width:100%;padding:14px;background:linear-gradient(135deg,#6c63ff,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:4px}
+.skip{display:block;text-align:center;margin-top:12px;color:#555;font-size:.82rem;cursor:pointer;text-decoration:underline}
+.welcome{display:flex;align-items:center;gap:10px;margin-bottom:24px;background:#6c63ff11;border:1px solid #6c63ff33;border-radius:12px;padding:12px 14px}
+.welcome img{width:36px;height:36px;border-radius:50%}
+.welcome-text{font-size:.88rem}
+.welcome-text strong{color:#a78bfa}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><div class="logo-icon">📬</div><div class="logo-text">MailMind</div></div>
+
+  {% if user.picture %}
+  <div class="welcome">
+    <img src="{{ user.picture }}" alt=""/>
+    <div class="welcome-text">Welcome, <strong>{{ user.name or user.email }}</strong>! Let's set up your courses.</div>
+  </div>
+  {% endif %}
+
+  <h2>What courses are you taking?</h2>
+  <p>Add your course codes so MailMind knows which emails are yours. It will mark anything unrecognised for your review.</p>
+
+  <div class="step"><span class="step-icon">💡</span>Use BITS codes like <strong style="color:#a78bfa">MATH F111</strong>, <strong style="color:#a78bfa">CS F213</strong>, or short names like <strong style="color:#a78bfa">U103</strong>, <strong style="color:#a78bfa">Maths</strong></div>
+  <div class="step"><span class="step-icon">🔍</span>Also detects L1, P2, T3 components (Lecture, Practical, Tutorial)</div>
+
+  <br/>
+  <label>Your courses</label>
+  <div class="input-row">
+    <input type="text" id="courseInput" placeholder="e.g. MATH F111, U103, CS..." onkeydown="if(event.key==='Enter')addCourse()"/>
+    <button class="add-btn" onclick="addCourse()">+ Add</button>
+  </div>
+  <div class="tags" id="tags"></div>
+  <div class="hint">You can always update this later in your Profile. MailMind will still scan everything — unknown courses just get flagged for review.</div>
+
+  <button class="cta" onclick="save()">Get Started →</button>
+  <span class="skip" onclick="skip()">Skip for now</span>
+</div>
+
+<script>
+const courses = [];
+
+function addCourse() {
+  const inp = document.getElementById("courseInput");
+  const val = inp.value.trim().toUpperCase();
+  if (!val || courses.includes(val)) { inp.value = ""; return; }
+  // Allow comma-separated input
+  const parts = val.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+  parts.forEach(p => { if (!courses.includes(p)) courses.push(p); });
+  inp.value = "";
+  renderTags();
+}
+
+function removeCourse(c) {
+  const i = courses.indexOf(c);
+  if (i >= 0) courses.splice(i, 1);
+  renderTags();
+}
+
+function renderTags() {
+  document.getElementById("tags").innerHTML = courses.map(c =>
+    `<span class="tag">${c}<span class="rm" onclick="removeCourse('${c}')">✕</span></span>`
+  ).join("");
+}
+
+async function save() {
+  await fetch("/onboarding/save", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ courses })
+  });
+  window.location.href = "/";
+}
+
+function skip() {
+  fetch("/onboarding/save", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ courses: [] })
+  }).then(() => window.location.href = "/");
+}
+</script>
+</body>
+</html>

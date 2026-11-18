@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import json
 
 db = SQLAlchemy()
 
@@ -12,28 +13,51 @@ class User(db.Model):
     access_token  = db.Column(db.Text)
     refresh_token = db.Column(db.Text)
     last_scan     = db.Column(db.DateTime)
+    onboarded     = db.Column(db.Boolean, default=False)
+    courses_json  = db.Column(db.Text, default="[]")  # JSON list of course codes
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     events        = db.relationship("Event", backref="user", lazy=True, cascade="all,delete")
     slots         = db.relationship("ScheduleSlot", backref="user", lazy=True, cascade="all,delete")
+
+    @property
+    def courses(self):
+        try:
+            return json.loads(self.courses_json or "[]")
+        except Exception:
+            return []
+
+    @courses.setter
+    def courses(self, val):
+        self.courses_json = json.dumps(val)
+
 
 class Event(db.Model):
     __tablename__ = "events"
     id          = db.Column(db.Integer, primary_key=True)
     user_id     = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title       = db.Column(db.String(256))
-    date        = db.Column(db.String(16))   # YYYY-MM-DD
-    time        = db.Column(db.String(16))   # HH:MM AM/PM or null
-    type        = db.Column(db.String(32))   # exam/deadline/assignment/event/meeting
+    date        = db.Column(db.String(16))    # YYYY-MM-DD
+    time        = db.Column(db.String(16))    # HH:MM AM/PM or null
+    type        = db.Column(db.String(32))    # exam/quiz/labtest/deadline/assignment/event/meeting
+    subtype     = db.Column(db.String(32))    # midsem/endsem/compre/quiz/labtest
+    subject     = db.Column(db.String(64))    # detected course/subject
+    component   = db.Column(db.String(16))    # L1/P2/T3 etc.
     description = db.Column(db.Text)
-    source      = db.Column(db.String(256))
+    source      = db.Column(db.String(256))   # email subject
+    source_url  = db.Column(db.String(512))   # Gmail link
+    confirmed   = db.Column(db.Boolean, default=True)   # False = needs user review
     priority    = db.Column(db.Integer, default=1)
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
-        return dict(id=self.id, title=self.title, date=self.date,
-                    time=self.time, type=self.type,
-                    description=self.description, source=self.source,
-                    priority=self.priority)
+        return dict(
+            id=self.id, title=self.title, date=self.date, time=self.time,
+            type=self.type, subtype=self.subtype, subject=self.subject,
+            component=self.component, description=self.description,
+            source=self.source, source_url=self.source_url,
+            confirmed=self.confirmed, priority=self.priority
+        )
+
 
 class ScheduleSlot(db.Model):
     __tablename__ = "schedule_slots"
@@ -41,10 +65,10 @@ class ScheduleSlot(db.Model):
     user_id     = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     event_id    = db.Column(db.Integer, db.ForeignKey("events.id", ondelete="CASCADE"))
     date        = db.Column(db.String(16))
-    start_time  = db.Column(db.String(8))   # HH:MM
+    start_time  = db.Column(db.String(8))
     end_time    = db.Column(db.String(8))
     label       = db.Column(db.String(256))
-    slot_type   = db.Column(db.String(32))  # prep/review/buffer
+    slot_type   = db.Column(db.String(32))   # prep/review/buffer
     done        = db.Column(db.Boolean, default=False)
 
     def to_dict(self):

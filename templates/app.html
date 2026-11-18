@@ -102,6 +102,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .btn{padding:9px 18px;border-radius:10px;font-size:.85rem;font-weight:600;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
 .btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--muted)}
 .btn-danger{background:#ff4d4d18;border:1px solid #ff4d4d44;color:#ff7070}
+/* Mail link */
+.mail-link{display:inline-flex;align-items:center;gap:4px;color:#74c0fc;font-size:.72rem;text-decoration:none;padding:2px 7px;border-radius:8px;background:#74c0fc11;border:1px solid #74c0fc22;transition:background .15s}
+.mail-link:hover{background:#74c0fc22}
+/* Component badge */
+.comp-badge{padding:2px 7px;border-radius:8px;background:#a78bfa22;color:#a78bfa;font-size:.68rem;font-weight:700}
+/* Review box */
+.review-box{background:#ff9f4318;border:1px solid #ff9f4344;border-radius:14px;padding:14px;margin-bottom:14px}
+.review-box-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:.8rem;font-weight:700;color:#ff9f43}
+.review-actions{display:flex;gap:7px;margin-top:9px}
+.btn-confirm{padding:5px 12px;background:#69db7c22;border:1px solid #69db7c44;color:#69db7c;border-radius:8px;font-size:.75rem;font-weight:600;cursor:pointer}
+.btn-dismiss{padding:5px 12px;background:#ff4d4d18;border:1px solid #ff4d4d44;color:#ff7070;border-radius:8px;font-size:.75rem;font-weight:600;cursor:pointer}
+/* Courses section */
+.course-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;min-height:28px}
+.ctag{padding:4px 11px;background:#6c63ff22;border:1px solid #6c63ff44;border-radius:16px;font-size:.78rem;color:#a78bfa}
+/* Footer credit */
+.dev-credit{text-align:center;padding:14px 16px calc(var(--safe-bot)+6px);font-size:.7rem;color:#333;border-top:1px solid #16161f}
+.dev-credit span{color:#444}
 </style>
 </head>
 <body>
@@ -130,11 +147,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
     </div>
     <div class="chips" id="filterChips" style="display:none">
       <button class="chip active" onclick="filterBy('all',this)">All</button>
-      <button class="chip" onclick="filterBy('exam',this)">📝 Exams</button>
+      <button class="chip" onclick="filterBy('compre',this)">🔴 Compre/Endsem</button>
+      <button class="chip" onclick="filterBy('midsem',this)">🟠 Midsem</button>
+      <button class="chip" onclick="filterBy('quiz',this)">📝 Quizzes</button>
+      <button class="chip" onclick="filterBy('labtest',this)">🧪 Lab Tests</button>
       <button class="chip" onclick="filterBy('deadline',this)">⏰ Deadlines</button>
       <button class="chip" onclick="filterBy('assignment',this)">📚 Assignments</button>
       <button class="chip" onclick="filterBy('event',this)">📅 Events</button>
       <button class="chip" onclick="filterBy('meeting',this)">🤝 Meetings</button>
+    </div>
+    <!-- Needs Review box -->
+    <div id="reviewBox" style="display:none">
+      <div class="review-box">
+        <div class="review-box-header">⚠️ Needs Review — course not recognised</div>
+        <div id="reviewArea"></div>
+      </div>
     </div>
     <div id="eventsArea">
       <div class="empty"><div class="ei">📬</div><h3>Tap Scan to get started</h3><p>MailMind will scan your Gmail and extract upcoming events automatically.</p></div>
@@ -171,10 +198,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
       🔒 <strong style="color:var(--text)">Your emails are never read by AI.</strong><br/>
       All scanning uses local pattern matching. Email content never leaves your browser session.
     </div>
+    <div class="sec">Your Courses</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">
+      <div style="font-size:.82rem;color:var(--muted);margin-bottom:8px">Emails mentioning unrecognised courses will be flagged for review.</div>
+      <div class="course-tags" id="profileCourseTags"></div>
+      <button class="btn btn-ghost" style="margin-top:12px;font-size:.8rem;padding:7px 14px" onclick="window.location='/onboarding'">✏️ Edit courses</button>
+    </div>
     <a href="/logout" class="btn btn-danger" style="width:100%;justify-content:center;text-decoration:none;margin-top:8px">Sign out</a>
   </div>
 
 </div>
+
+<!-- Developer credit -->
+<div class="dev-credit">Developer — <span>Ishitva Dubey</span></div>
 
 <!-- Bottom nav -->
 <div class="bottomnav">
@@ -221,7 +257,8 @@ function showPanel(name){
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────
-const TICON={exam:"📝",deadline:"⏰",assignment:"📚",event:"📅",meeting:"🤝",other:"📌"};
+const TICON={exam:"📝",quiz:"📝",labtest:"🧪",deadline:"⏰",assignment:"📚",event:"📅",meeting:"🤝",other:"📌",midsem:"📝",endsem:"📋",compre:"🎯"};
+const TLABEL={exam:"Exam",quiz:"Quiz",labtest:"Lab Test",deadline:"Deadline",assignment:"Assignment",event:"Event",meeting:"Meeting",other:"Other",midsem:"Midsem",endsem:"Endsem",compre:"Compre"};
 let allEvents=[];
 
 function renderEvents(evs){
@@ -230,25 +267,44 @@ function renderEvents(evs){
   const urgent=[],soon=[],later=[];
   evs.forEach(e=>{const d=daysUntil(e.date);if(d<=2)urgent.push(e);else if(d<=7)soon.push(e);else later.push(e);});
   const section=(t,arr)=>arr.length?`<div class="sec">${t}</div>`+arr.map(ecard).join(""):"";
-  el.innerHTML=section("🔴 Urgent",urgent)+section("🟡 This week",soon)+section("📅 Upcoming",later);
+  el.innerHTML=section("🔴 Urgent (≤2 days)",urgent)+section("🟡 This week",soon)+section("📅 Upcoming",later);
 }
 
-function ecard(e){
-  const typ=(e.type||"other"),icon=TICON[typ]||"📌";
+function effectiveType(e){
+  // For filtering: compre/endsem share a chip, midsem has its own
+  if(e.subtype==="compre"||e.subtype==="endsem") return "compre";
+  if(e.subtype==="midsem") return "midsem";
+  if(e.subtype==="quiz"||e.type==="quiz") return "quiz";
+  if(e.subtype==="labtest"||e.type==="labtest") return "labtest";
+  return e.type||"other";
+}
+
+function ecard(e, isReview=false){
+  const typ=effectiveType(e);
+  const icon=TICON[typ]||"📌";
+  const label=TLABEL[e.subtype||e.type]||e.type||"other";
   const d=daysUntil(e.date);
   const dCls="date-tag"+(d<=2?" urgent":d<=7?" soon":"");
   const dl=d===0?" · Today!":d===1?" · Tomorrow!":`· ${d}d`;
-  return `<div class="ecard"><div class="ecard-icon ${typ}-ic">${icon}</div><div class="ecard-body">
+  const subj=e.subject?`<span class="badge" style="background:#ffffff11;color:#aaa">${esc(e.subject)}</span>`:"";
+  const comp=e.component?`<span class="comp-badge">${esc(e.component)}</span>`:"";
+  const mailLink=e.source_url?`<a class="mail-link" href="${esc(e.source_url)}" target="_blank" rel="noopener">✉️ Open email</a>`:"";
+  const reviewBtns=isReview?`<div class="review-actions">
+    <button class="btn-confirm" onclick="confirmEvent(${e.id})">✓ It's mine</button>
+    <button class="btn-dismiss" onclick="dismissEvent(${e.id})">✕ Not mine</button>
+  </div>`:"";
+  return `<div class="ecard" id="ecard-${e.id}"><div class="ecard-icon ${typ}-ic">${icon}</div><div class="ecard-body">
     <div class="ecard-title">${esc(e.title)}</div>
     <div class="ecard-desc">${esc(e.description)}</div>
-    <div class="ecard-meta"><span class="badge badge-${typ}">${typ}</span><span class="${dCls}">📅 ${fmtDate(e.date,e.time)} ${dl}</span></div>
+    <div class="ecard-meta"><span class="badge badge-${typ==="compre"?"exam":typ}">${label}</span>${subj}${comp}<span class="${dCls}">📅 ${fmtDate(e.date,e.time)} ${dl}</span>${mailLink}</div>
+    ${reviewBtns}
   </div></div>`;
 }
 
 function filterBy(type,btn){
   document.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
   btn.classList.add("active");
-  renderEvents(type==="all"?allEvents:allEvents.filter(e=>e.type===type));
+  renderEvents(type==="all"?allEvents:allEvents.filter(e=>effectiveType(e)===type));
 }
 
 async function doScan(){
@@ -267,12 +323,54 @@ async function doScan(){
   finally{btn.disabled=false;btn.textContent="🔍 Scan";}
 }
 
+async function confirmEvent(id){
+  await fetch(`/api/event/${id}/confirm`,{method:"POST"});
+  await loadEvents();
+  toast("Event confirmed ✓");
+}
+async function dismissEvent(id){
+  await fetch(`/api/event/${id}/dismiss`,{method:"POST"});
+  document.getElementById("ecard-"+id)?.remove();
+  // also remove from review list
+  await loadEvents();
+  toast("Dismissed");
+}
+
 async function loadEvents(){
   const r=await fetch("/api/events");
-  allEvents=await r.json();
+  const data=await r.json();
+  // Separate confirmed vs review
+  allEvents=data.filter(e=>e.confirmed!==false);
+  const review=data.filter(e=>e.confirmed===false);
+  // Render review box
+  const rb=document.getElementById("reviewBox");
+  const ra=document.getElementById("reviewArea");
+  if(review.length){
+    ra.innerHTML=review.map(e=>ecard(e,true)).join("");
+    rb.style.display="block";
+  } else {
+    rb.style.display="none";
+    ra.innerHTML="";
+  }
   document.getElementById("filterChips").style.display=allEvents.length?"flex":"none";
   document.querySelectorAll(".chip").forEach((c,i)=>c.classList.toggle("active",i===0));
   renderEvents(allEvents);
+  // Load courses in profile
+  loadProfileCourses();
+}
+
+async function loadProfileCourses(){
+  try{
+    const r=await fetch("/api/courses");
+    const d=await r.json();
+    const el=document.getElementById("profileCourseTags");
+    if(!el) return;
+    if(d.courses&&d.courses.length){
+      el.innerHTML=d.courses.map(c=>`<span class="ctag">${esc(c)}</span>`).join("");
+    } else {
+      el.innerHTML=`<span style="color:var(--muted);font-size:.8rem">No courses set — <a href="/onboarding" style="color:var(--accent2)">add them</a></span>`;
+    }
+  }catch(e){}
 }
 
 // ── Calendar ───────────────────────────────────────────────────────────────
@@ -286,7 +384,12 @@ function initCalendar(){
     eventClick(info){
       const p=info.event.extendedProps;
       if(p.kind==="slot") toggleSlot(p.slot_id,info.event);
-      else toast(p.description||info.event.title);
+      else if(p.source_url){
+        // Open original email in new tab
+        window.open(p.source_url,"_blank","noopener");
+      } else {
+        toast(p.description||info.event.title);
+      }
     },
     height:"auto",
     eventDisplay:"block",
