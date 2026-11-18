@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#6c63ff"/>
+<title>MailMind — Setup</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f13;color:#e2e2f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#16161f;border:1px solid #22222e;border-radius:20px;padding:28px;max-width:500px;width:100%}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:24px}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,#6c63ff,#a78bfa);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.logo-text{font-size:1.2rem;font-weight:800}
+.welcome{display:flex;align-items:center;gap:10px;background:#6c63ff11;border:1px solid #6c63ff33;border-radius:12px;padding:11px 13px;margin-bottom:20px}
+.welcome img{width:34px;height:34px;border-radius:50%}
+.welcome-text{font-size:.85rem}.welcome-text strong{color:#a78bfa}
+h2{font-size:1.2rem;font-weight:800;margin-bottom:7px}
+p.sub{font-size:.85rem;color:#888;line-height:1.5;margin-bottom:20px}
+.tip{display:flex;align-items:center;gap:9px;background:#0f0f13;border:1px solid #22222e;border-radius:11px;padding:10px 13px;margin-bottom:8px;font-size:.82rem;color:#999}
+label.lbl{display:block;font-size:.75rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
+.input-row{display:flex;gap:8px;margin-bottom:10px}
+input[type=text]{flex:1;background:#0f0f13;border:1px solid #2e2e3e;border-radius:10px;padding:10px 13px;color:#e2e2f0;font-size:.88rem;outline:none}
+input[type=text]:focus{border-color:#6c63ff}
+input[type=text]::placeholder{color:#3a3a4a}
+.add-btn{padding:10px 15px;background:#6c63ff22;border:1px solid #6c63ff55;color:#a78bfa;border-radius:10px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap}
+/* Course item */
+.course-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;min-height:10px}
+.course-item{background:#0f0f13;border:1px solid #22222e;border-radius:12px;padding:10px 13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.course-code{font-size:.88rem;font-weight:700;color:#a78bfa;min-width:80px}
+.comp-toggles{display:flex;gap:6px;flex:1}
+.ctog{padding:4px 11px;border-radius:16px;font-size:.75rem;font-weight:700;cursor:pointer;border:1px solid #2e2e3e;background:transparent;color:#555;transition:all .15s;user-select:none}
+.ctog.on{background:#6c63ff22;border-color:#6c63ff55;color:#a78bfa}
+.ctog.L.on{background:#74c0fc22;border-color:#74c0fc55;color:#74c0fc}
+.ctog.P.on{background:#69db7c22;border-color:#69db7c55;color:#69db7c}
+.ctog.T.on{background:#ffd43b22;border-color:#ffd43b55;color:#ffd43b}
+.rm-btn{padding:3px 8px;background:transparent;border:1px solid #2e2e3e;color:#555;border-radius:8px;font-size:.75rem;cursor:pointer;margin-left:auto}
+.rm-btn:hover{border-color:#ff4d4d55;color:#ff7070}
+.hint{font-size:.73rem;color:#444;margin-bottom:20px;line-height:1.6}
+.cta{width:100%;padding:13px;background:linear-gradient(135deg,#6c63ff,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:.95rem;font-weight:700;cursor:pointer;margin-top:4px}
+.skip{display:block;text-align:center;margin-top:11px;color:#444;font-size:.8rem;cursor:pointer;text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><div class="logo-icon">📬</div><div class="logo-text">MailMind</div></div>
+
+  {% if user.picture %}
+  <div class="welcome">
+    <img src="{{ user.picture }}" alt=""/>
+    <div class="welcome-text">Welcome, <strong>{{ user.name or user.email }}</strong>! Let's set up your courses.</div>
+  </div>
+  {% endif %}
+
+  <h2>What courses are you taking?</h2>
+  <p class="sub">Add your course codes and tick which components you have. MailMind uses this to flag emails that might not be for you.</p>
+
+  <div class="tip">💡 Use BITS codes like <strong style="color:#a78bfa">MATH F111</strong>, <strong style="color:#a78bfa">CS F213</strong>, or short names like <strong style="color:#a78bfa">U103</strong></div>
+  <div class="tip">🔘 Toggle <strong style="color:#74c0fc">L</strong> Lecture &nbsp;·&nbsp; <strong style="color:#69db7c">P</strong> Practical/Lab &nbsp;·&nbsp; <strong style="color:#ffd43b">T</strong> Tutorial — only for components you actually have</div>
+
+  <label class="lbl">Your courses</label>
+  <div class="input-row">
+    <input type="text" id="courseInput" placeholder="e.g. MATH F111, U103, CS…" onkeydown="if(event.key==='Enter')addCourse()"/>
+    <button class="add-btn" onclick="addCourse()">+ Add</button>
+  </div>
+
+  <div class="course-list" id="courseList"></div>
+
+  <div class="hint">
+    Not all courses have all three components — just toggle the ones yours has.<br/>
+    You can update this anytime from your Profile. Unknown-course emails get flagged for review.
+  </div>
+
+  <button class="cta" onclick="save()">Get Started →</button>
+  <span class="skip" onclick="skip()">Skip for now</span>
+</div>
+
+<script>
+// courses = [{code:"MATH F111", components:["L","P","T"]}, ...]
+const courses = [];
+
+function addCourse(){
+  const inp = document.getElementById("courseInput");
+  const val = inp.value.trim().toUpperCase();
+  if(!val){ inp.value=""; return; }
+  inp.value = "";
+  // Allow comma-separated
+  val.split(/[,;]+/).map(s=>s.trim()).filter(Boolean).forEach(code=>{
+    if(!courses.find(c=>c.code===code)){
+      courses.push({code, components:["L","P","T"]}); // default all on
+    }
+  });
+  render();
+}
+
+function toggleComp(code, comp){
+  const c = courses.find(x=>x.code===code);
+  if(!c) return;
+  const i = c.components.indexOf(comp);
+  if(i>=0) c.components.splice(i,1); else c.components.push(comp);
+  render();
+}
+
+function removeCourse(code){
+  const i = courses.findIndex(c=>c.code===code);
+  if(i>=0) courses.splice(i,1);
+  render();
+}
+
+function render(){
+  const list = document.getElementById("courseList");
+  if(!courses.length){ list.innerHTML=""; return; }
+  list.innerHTML = courses.map(c=>{
+    const btns = ["L","P","T"].map(comp=>{
+      const on = c.components.includes(comp);
+      return `<button class="ctog ${comp}${on?" on":""}" onclick="toggleComp('${c.code}','${comp}')">${comp}</button>`;
+    }).join("");
+    return `<div class="course-item">
+      <span class="course-code">${c.code}</span>
+      <div class="comp-toggles">${btns}</div>
+      <button class="rm-btn" onclick="removeCourse('${c.code}')">✕</button>
+    </div>`;
+  }).join("");
+}
+
+async function save(){
+  await fetch("/onboarding/save",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({courses})
+  });
+  window.location.href="/";
+}
+
+function skip(){
+  fetch("/onboarding/save",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({courses:[]})
+  }).then(()=>window.location.href="/");
+}
+</script>
+</body>
+</html>

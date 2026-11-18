@@ -151,7 +151,7 @@ def api_scan():
         Event.query.filter_by(user_id=user.id).delete()
 
         all_events = []
-        user_courses = user.courses  # from onboarding
+        user_courses = user.courses  # list of {code, components} dicts (or legacy strings)
 
         for m in msgs[:40]:
             try:
@@ -355,7 +355,14 @@ def api_get_courses():
     user = current_user()
     if not user:
         return jsonify({"courses": []})
-    return jsonify({"courses": user.courses})
+    # Normalise legacy plain-string entries for the UI
+    courses = []
+    for c in user.courses:
+        if isinstance(c, dict):
+            courses.append(c)
+        else:
+            courses.append({"code": str(c), "components": ["L","P","T"]})
+    return jsonify({"courses": courses})
 
 
 @app.route("/api/courses", methods=["POST"])

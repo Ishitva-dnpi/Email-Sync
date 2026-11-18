@@ -21,6 +21,7 @@ class User(db.Model):
 
     @property
     def courses(self):
+        """Returns list of dicts: [{code, components}] or plain strings (legacy)."""
         try:
             return json.loads(self.courses_json or "[]")
         except Exception:
@@ -29,6 +30,17 @@ class User(db.Model):
     @courses.setter
     def courses(self, val):
         self.courses_json = json.dumps(val)
+
+    @property
+    def course_codes(self):
+        """Returns just the code strings for quick matching."""
+        result = []
+        for c in self.courses:
+            if isinstance(c, dict):
+                result.append(c.get("code", ""))
+            else:
+                result.append(str(c))
+        return [x for x in result if x]
 
 
 class Event(db.Model):

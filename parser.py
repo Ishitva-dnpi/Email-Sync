@@ -213,18 +213,38 @@ def _priority(text: str, typ: str, subtype) -> int:
     return 1
 
 
-def _confirmed(subject_code, user_courses) -> bool:
-    """True if the email's course matches the user's registered courses."""
+def _confirmed(subject_code, component, user_courses) -> bool:
+    """
+    True if the email's course (and component, if detected) matches
+    the user's registered courses.
+    user_courses can be:
+      - list of dicts: [{code, components}, ...]   (new format)
+      - list of plain strings                       (legacy)
+    """
     if not user_courses:
         return True  # no courses set → accept everything
     if not subject_code:
         return False  # unrecognised course → needs review
-    code_up = subject_code.upper()
+
+    code_up = subject_code.upper().replace(" ", "")
+
     for uc in user_courses:
-        uc_up = uc.upper().replace(" ", "")
-        c_up  = code_up.replace(" ", "")
-        if uc_up in c_up or c_up in uc_up:
+        # Normalise to dict form
+        if isinstance(uc, dict):
+            uc_code = uc.get("code", "").upper().replace(" ", "")
+            uc_comps = [c.upper() for c in uc.get("components", [])]
+        else:
+            uc_code  = str(uc).upper().replace(" ", "")
+            uc_comps = ["L", "P", "T"]  # legacy: assume all
+
+        if uc_code in code_up or code_up in uc_code:
+            # Course matches — now check component if detected
+            if component and uc_comps:
+                comp_letter = component[0].upper()  # L/P/T from L1/P2/T3
+                if comp_letter not in uc_comps:
+                    return False  # e.g. course has no P but email mentions P2
             return True
+
     return False
 
 
@@ -259,7 +279,7 @@ def extract_events(email_subject: str, email_body: str, email_date, user_courses
     component    = detect_component(full_text)
     time_str     = _parse_time(full_text)
     priority     = _priority(full_text, typ, subtype)
-    is_confirmed = _confirmed(subject_code, user_courses)
+    is_confirmed = _confirmed(subject_code, component, user_courses)
 
     # Build a readable title
     parts = []
