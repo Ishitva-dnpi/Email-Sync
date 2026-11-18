@@ -140,32 +140,38 @@ def classify(text: str):
 
 
 def _parse_dates(text: str, email_date):
-    """Extract all candidate dates from text using dateparser."""
+    """Extract candidate dates from text — fast, limited to first 1500 chars."""
+    text = text[:1500]  # only scan beginning of email
     dates = []
     settings = {
         "PREFER_DATES_FROM": "future",
         "RELATIVE_BASE": email_date or datetime.now(),
         "RETURN_AS_TIMEZONE_AWARE": False,
+        "PARSERS": ["absolute-time", "custom-formats"],  # skip slow parsers
     }
-    # Split on sentence boundaries & look for date-like fragments
     patterns = [
-        r'(?:on|by|before|due|scheduled|date)[:\s]+([A-Za-z0-9,\s/:.-]+?)(?:\.|,|$)',
+        r'(?:on|by|before|due|date)[:\s]+([A-Za-z0-9,\s/:.-]{4,30}?)(?:\.|,|\n|$)',
         r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
         r'(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{0,4})',
         r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:\s*,\s*\d{4})?)',
-        r'((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[,\s]+[A-Za-z0-9\s,]+)',
-        r'(\d{1,2}(?:st|nd|rd|th)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{0,4})',
+        r'(\d{1,2}(?:st|nd|rd|th)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*)',
     ]
     seen = set()
+    base = email_date or datetime.now()
     for pat in patterns:
         for m in re.finditer(pat, text, re.IGNORECASE):
             snippet = m.group(1).strip()
             if snippet in seen or len(snippet) < 4:
                 continue
             seen.add(snippet)
-            parsed = dateparser.parse(snippet, settings=settings)
-            if parsed and parsed > (email_date or datetime.now()) - timedelta(days=1):
+            try:
+                parsed = dateparser.parse(snippet, settings=settings)
+            except Exception:
+                continue
+            if parsed and parsed > base - timedelta(days=1):
                 dates.append(parsed)
+        if len(dates) >= 2:  # stop early once we have enough
+            break
     return dates
 
 

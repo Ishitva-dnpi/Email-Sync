@@ -143,7 +143,7 @@ def api_scan():
         )
         service = build("gmail", "v1", credentials=creds)
         results = service.users().messages().list(
-            userId="me", maxResults=60, q=f"newer_than:{days}d"
+            userId="me", maxResults=25, q=f"newer_than:{days}d"
         ).execute()
         msgs = results.get("messages", [])
 
@@ -153,7 +153,7 @@ def api_scan():
         all_events = []
         user_courses = user.courses  # list of {code, components} dicts (or legacy strings)
 
-        for m in msgs[:40]:
+        for m in msgs[:20]:
             try:
                 msg      = service.users().messages().get(
                     userId="me", id=m["id"], format="full"
