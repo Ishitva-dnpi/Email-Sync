@@ -1,4 +1,4 @@
-import os, json, base64, re
+import os, json, base64, re, time
 from datetime import datetime, timedelta
 from flask import Flask, redirect, url_for, session, jsonify, request, render_template
 from authlib.integrations.flask_client import OAuth
@@ -172,7 +172,12 @@ def api_scan():
         all_events = []
         user_courses = user.courses  # list of {code, components} dicts (or legacy strings)
 
+        from email.utils import parsedate_to_datetime
+        deadline = time.time() + 45  # hard 45-second cutoff
+
         for m in msgs[:20]:
+            if time.time() > deadline:
+                break
             try:
                 msg      = service.users().messages().get(
                     userId="me", id=m["id"], format="full"
@@ -186,7 +191,6 @@ def api_scan():
 
                 email_date = None
                 try:
-                    from email.utils import parsedate_to_datetime
                     email_date = parsedate_to_datetime(date_str).replace(tzinfo=None)
                 except Exception:
                     pass
