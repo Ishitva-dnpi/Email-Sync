@@ -1,335 +1,303 @@
 """
-Smart local email parser — spaCy NER + academic subcategory + component detection.
-Zero API usage. Understands BITS-style course codes, L/P/T components.
+MailMind parser — zero heavy dependencies.
+Uses dateparser + regex only (no spaCy / no API).
 """
 import re
 import dateparser
 from datetime import datetime, timedelta
 
-try:
-    import spacy
-    try:
-        nlp = spacy.load("en_core_web_sm")
-        SPACY_OK = True
-    except OSError:
-        nlp = None
-        SPACY_OK = False
-except ImportError:
-    nlp = None
-    SPACY_OK = False
-
-# ── Academic subcategory keywords ─────────────────────────────────────────
-EXAM_SUBTYPES = {
-    "midsem":  ["midsem", "mid-sem", "mid sem", "midterm", "mid-term",
-                "mid term", "midsemester", "mid semester"],
-    "endsem":  ["endsem", "end-sem", "end sem", "endsemester",
-                "end semester", "final exam", "finals", "end term"],
-    "compre":  ["compre", "comprehensive", "comprehensive exam"],
-    "quiz":    ["quiz", "class test", "ct1", "ct2", "ct3", "ct4", "ct5",
-                "weekly test", "unit test", "pop quiz", "surprise test",
-                "class quiz"],
-    "labtest": ["lab test", "lab exam", "lab assessment", "practical exam",
-                "practical test", "lab viva", "lab evaluation", "lab quiz",
-                "lab sessional"],
-    "viva":    ["viva", "oral exam", "oral test", "oral examination"],
-}
-
-KEYWORDS = {
-    "exam":       list(set(sum(EXAM_SUBTYPES.values(), []) +
-                   ["exam", "examination", "test on", "scheduled test"])),
-    "deadline":   ["deadline", "due date", "last date", "submit by",
-                   "submission deadline", "closing date", "expire",
-                   "expires on", "last day to", "cutoff", "final date"],
-    "assignment": ["assignment", "homework", "project due", "report due",
-                   "submit", "submission", "turn in", "hand in", "coursework",
-                   "lab report", "problem set", "pset", "tutorial submission"],
-    "meeting":    ["meeting", "meet at", "call at", "zoom", "teams meeting",
-                   "google meet", "conference", "seminar", "webinar",
-                   "session at", "office hours", "sync at"],
-    "event":      ["event", "workshop", "hackathon", "fest", "festival",
-                   "ceremony", "orientation", "induction", "registration",
-                   "open day", "career fair", "placement", "interview",
-                   "presentation"],
-}
-
-PRIORITY = {
-    "compre": 7, "endsem": 7, "midsem": 6, "labtest": 5, "viva": 5,
-    "quiz": 4, "exam": 5, "deadline": 4, "assignment": 3,
-    "meeting": 2, "event": 1, "other": 1,
-}
-
-# ── Course / subject detection ─────────────────────────────────────────────
-# BITS codes: MATH F111, CS F111, PHY F110, U103, U104, BIO F111, BITS F112
-_COURSE_CODE_RE = re.compile(
-    r'\b([A-Z]{2,5}\s+F\s*\d{3,4}[A-Z]?'   # MATH F111, CS F213
-    r'|[A-Z]{2,5}F\d{3,4}'                   # CSF213
-    r'|[A-Z][a-z]*\s*F\d{3}'                 # PhyF110
-    r'|[Uu]\d{3,4}'                           # U103, u104
+# ── Course code patterns ───────────────────────────────────────────────────
+_COURSE_RE = re.compile(
+    r'\b([A-Z]{2,5}\s*F\s*\d{3,4}[A-Z]?'   # MATH F111, CS F213, ECE F242
+    r'|[A-Z][a-z]*\s*F\d{3}'               # MathF111
+    r'|[Uu]\d{3,4}'                         # U103, U104
+    r'|(?:BITS|bits)\s*F\d{3}'             # BITS F111
     r')\b',
     re.IGNORECASE
 )
 
+# Short subject aliases (single words that map to subjects)
 _SUBJECT_ALIASES = {
-    "maths":     ["math", "maths", "mathematics", "calculus", "algebra",
-                  "statistics", "stat", "linear algebra", "discrete math"],
-    "physics":   ["physics", "phy", "mechanics", "quantum", "electro",
-                  "thermodynamics for phy"],
-    "chemistry": ["chemistry", "chem", "organic", "inorganic", "physical chem"],
-    "biology":   ["biology", "bio", "biochem", "microbio", "genetics"],
-    "cs":        ["cs", "computer science", "programming", "data structures",
-                  "algorithms", "dsa", "oop", "object oriented", "dbms",
-                  "database", "os ", "operating system", "networks", "cn",
-                  "compiler", "software engineering", "python", "java", "c++"],
-    "mgts":      ["mgts", "management", "economics", "econ", "finance",
-                  "accounting", "hrm", "marketing", "strategy", "business"],
-    "english":   ["english", "communication", "language", "writing", "grammar",
-                  "technical writing"],
-    "ee":        ["ee", "electrical", "electronics", "circuits", "signals",
-                  "control system", "embedded", "vlsi", "microprocessor"],
-    "me":        ["mechanical", "thermodynamics", "fluid mechanics",
-                  "manufacturing", "machine design"],
-    "civil":     ["civil", "structural", "construction", "surveying",
-                  "geotechnical"],
-    "bits":      ["bits", "bits f", "think and do"],
+    "maths": "MATHS", "math": "MATH", "mathematics": "MATHS",
+    "physics": "PHY", "phy": "PHY",
+    "chemistry": "CHEM", "chem": "CHEM",
+    "cs": "CS", "computer science": "CS", "computing": "CS",
+    "ds": "DS", "data structures": "DS",
+    "algo": "ALGO", "algorithms": "ALGO",
+    "mgts": "MGTS", "management": "MGTS",
+    "eco": "ECO", "economics": "ECO",
+    "english": "ENG", "eng": "ENG",
+    "bio": "BIO", "biology": "BIO",
+    "ee": "EEE", "electrical": "EEE",
+    "me": "ME", "mechanical": "ME",
+    "chem eng": "CHEME",
+    "thermodynamics": "THERMO", "thermo": "THERMO",
+    "signals": "SIGNALS", "dsp": "DSP",
+    "networking": "NET", "networks": "NET",
+    "os": "OS", "operating systems": "OS",
+    "dbms": "DBMS", "database": "DBMS",
+    "software": "SE", "se": "SE",
+    "ai": "AI", "ml": "ML", "machine learning": "ML",
 }
 
-# ── Component detection: L1, P2, T3, L-1, Lecture 1, Lab 2, Tutorial 3 ──
-_COMPONENT_RE = re.compile(
-    r'\b((?:L|P|T)\s*[-–]?\s*\d+)\b'           # L1, P2, T3, L-1
-    r'|\b(Lecture\s+\d+)\b'                      # Lecture 1
-    r'|\b(Lab\s+\d+|Practical\s+\d+)\b'          # Lab 2, Practical 2
-    r'|\b(Tutorial\s+\d+|Tut\s+\d+)\b',          # Tutorial 3
+# ── Component patterns ─────────────────────────────────────────────────────
+_COMP_RE = re.compile(
+    r'\b(L\s*[-–]?\s*\d+)\b'           # L1, L-1, L 1
+    r'|\b(P\s*[-–]?\s*\d+)\b'          # P2, P-2
+    r'|\b(T\s*[-–]?\s*\d+)\b'          # T3
+    r'|\b(Lecture\s+\d+)\b'            # Lecture 5
+    r'|\b(Lab\s+\d+)\b'                # Lab 3
+    r'|\b(Practical\s+\d+)\b'          # Practical 2
+    r'|\b(Tutorial\s+\d+|Tut\s+\d+)\b',# Tutorial 2
     re.IGNORECASE
 )
 
-_DATE_PATTERNS = [
-    r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b',
-    r'\b(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*\d{0,4})\b',
-    r'\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,?\s*\d{4})?)\b',
-    r'\b((?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s*,\s*\w+\s*\d{1,2})?)\b',
-    r'\b(tomorrow|today|next\s+\w+)\b',
-    r'\b(\d{1,2}(?:st|nd|rd|th)\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\b',
-]
-_DATE_RE  = re.compile('|'.join(_DATE_PATTERNS), re.IGNORECASE)
-_TIME_RE  = re.compile(r'\b(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))\b', re.IGNORECASE)
-_SENT_RE  = re.compile(r'(?<=[.!?])\s+')
+# ── Exam / event keywords ──────────────────────────────────────────────────
+_EXAM_KW = {
+    "compre": ["compre", "comprehensive", "comprehensive exam"],
+    "endsem": ["endsem", "end sem", "end-sem", "end semester", "final exam", "finals"],
+    "midsem": ["midsem", "mid sem", "mid-sem", "midterm", "mid semester", "mid term"],
+    "quiz":   ["quiz", "class test", "unit test", "ct"],
+    "labtest":["lab test", "lab exam", "practical exam", "practical test", "lab assessment"],
+    "viva":   ["viva", "oral exam", "oral test"],
+}
+_TYPE_KW = {
+    "exam":       ["exam", "test", "assessment", "evaluation"],
+    "deadline":   ["deadline", "due date", "submission", "submit by", "last date"],
+    "assignment": ["assignment", "homework", "hw", "project submission", "report submission"],
+    "meeting":    ["meeting", "lecture", "class", "session", "seminar", "workshop"],
+    "event":      ["event", "fest", "competition", "hackathon", "webinar", "symposium", "induction"],
+}
+
+# ── Urgency / priority keywords ────────────────────────────────────────────
+_URGENT_KW = ["urgent", "important", "reminder", "tomorrow", "today", "last chance",
+              "final", "compre", "endsem", "midsem"]
 
 
-def detect_subject(text: str) -> str | None:
-    m = _COURSE_CODE_RE.search(text)
-    if m:
-        return re.sub(r'\s+', ' ', m.group(0)).strip().upper()
-    t = text.lower()
-    for subject, aliases in _SUBJECT_ALIASES.items():
-        if any(a in t for a in aliases):
-            return subject.upper()
-    return None
+def _norm(text: str) -> str:
+    return re.sub(r'\s+', ' ', text.lower().strip())
 
 
-def detect_component(text: str) -> str | None:
-    """Detect L1/P2/T3 style components."""
-    m = _COMPONENT_RE.search(text)
+def detect_component(text: str):
+    m = _COMP_RE.search(text)
     if not m:
         return None
     raw = next(g for g in m.groups() if g)
-    # Normalise: Lecture 1 -> L1, Lab 2 -> P2, Tutorial 3 -> T3
     raw = raw.strip()
-    r = raw.lower()
-    if r.startswith("lecture"):
-        return "L" + re.search(r'\d+', raw).group()
-    if r.startswith("lab") or r.startswith("practical"):
-        return "P" + re.search(r'\d+', raw).group()
-    if r.startswith("tutorial") or r.startswith("tut"):
-        return "T" + re.search(r'\d+', raw).group()
-    # Already short form L1/P2/T3
-    return re.sub(r'[\s–-]', '', raw).upper()
+    # Normalise to L1/P2/T3 form
+    low = raw.lower()
+    if low.startswith("lecture"):
+        num = re.search(r'\d+', raw).group()
+        return f"L{num}"
+    if low.startswith("lab"):
+        num = re.search(r'\d+', raw).group()
+        return f"P{num}"
+    if low.startswith("practical"):
+        num = re.search(r'\d+', raw).group()
+        return f"P{num}"
+    if low.startswith("tutorial") or low.startswith("tut"):
+        num = re.search(r'\d+', raw).group()
+        return f"T{num}"
+    # Already L1/P2/T3
+    letter = raw[0].upper()
+    num = re.search(r'\d+', raw).group()
+    return f"{letter}{num}"
 
 
-def detect_exam_subtype(text: str) -> str | None:
-    t = text.lower()
-    for subtype, kws in EXAM_SUBTYPES.items():
-        if any(kw in t for kw in kws):
-            return subtype
+def detect_subject(text: str):
+    # Try BITS-style course codes first
+    m = _COURSE_RE.search(text)
+    if m:
+        return re.sub(r'\s+', ' ', m.group(0).upper().strip())
+    # Try subject aliases (whole-word match)
+    low = _norm(text)
+    for alias, canon in _SUBJECT_ALIASES.items():
+        if re.search(r'\b' + re.escape(alias) + r'\b', low):
+            return canon
     return None
 
 
-def classify(text: str) -> tuple[str, str | None]:
-    t = text.lower()
-    subtype = detect_exam_subtype(t)
-    if subtype:
-        if subtype == "quiz":
-            return "quiz", subtype
-        if subtype == "labtest":
-            return "labtest", subtype
-        return "exam", subtype
-    for typ, kws in KEYWORDS.items():
-        if any(kw in t for kw in kws):
-            return typ, None
-    return "other", None
+def detect_exam_subtype(text: str):
+    low = _norm(text)
+    for subtype, keywords in _EXAM_KW.items():
+        for kw in keywords:
+            if re.search(r'\b' + re.escape(kw) + r'\b', low):
+                return subtype
+    return None
 
 
-def has_keyword(text: str) -> bool:
-    t = text.lower()
-    return any(kw in t for kw in sum(KEYWORDS.values(), []))
+def classify(text: str):
+    """Returns (type, subtype)."""
+    low = _norm(text)
+    subtype = detect_exam_subtype(text)
+    if subtype in ("compre", "endsem", "midsem", "quiz", "labtest", "viva"):
+        return ("exam", subtype)
+    for typ, keywords in _TYPE_KW.items():
+        for kw in keywords:
+            if re.search(r'\b' + re.escape(kw) + r'\b', low):
+                return (typ, subtype)
+    return ("event", subtype)
 
 
-def parse_date(text: str, base: datetime = None) -> datetime | None:
-    base = base or datetime.now()
+def _parse_dates(text: str, email_date):
+    """Extract all candidate dates from text using dateparser."""
+    dates = []
     settings = {
         "PREFER_DATES_FROM": "future",
-        "RELATIVE_BASE": base,
+        "RELATIVE_BASE": email_date or datetime.now(),
         "RETURN_AS_TIMEZONE_AWARE": False,
     }
+    # Split on sentence boundaries & look for date-like fragments
+    patterns = [
+        r'(?:on|by|before|due|scheduled|date)[:\s]+([A-Za-z0-9,\s/:.-]+?)(?:\.|,|$)',
+        r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+        r'(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{0,4})',
+        r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:\s*,\s*\d{4})?)',
+        r'((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)[,\s]+[A-Za-z0-9\s,]+)',
+        r'(\d{1,2}(?:st|nd|rd|th)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s*\d{0,4})',
+    ]
+    seen = set()
+    for pat in patterns:
+        for m in re.finditer(pat, text, re.IGNORECASE):
+            snippet = m.group(1).strip()
+            if snippet in seen or len(snippet) < 4:
+                continue
+            seen.add(snippet)
+            parsed = dateparser.parse(snippet, settings=settings)
+            if parsed and parsed > (email_date or datetime.now()) - timedelta(days=1):
+                dates.append(parsed)
+    return dates
+
+
+def _parse_time(text: str):
+    """Extract first time mention like 9:00 AM, 14:00, 2pm."""
+    m = re.search(
+        r'\b(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?'
+        r'|\d{1,2}\s*(?:AM|PM|am|pm))\b',
+        text
+    )
+    if not m:
+        return None
+    raw = m.group(0).strip()
+    # Normalise
     try:
-        d = dateparser.parse(text, settings=settings)
-        if d and abs((d - base).days) < 730:
-            return d
+        t = datetime.strptime(raw.upper(), "%I:%M %p")
+        return t.strftime("%I:%M %p")
     except Exception:
         pass
-    return None
-
-
-def _sentences(text):
-    raw = _SENT_RE.split(text.strip())
-    return [s.strip() for s in raw if s.strip()] or [text]
-
-
-def _spacy_dates(text):
-    if not SPACY_OK or nlp is None:
-        return []
     try:
-        doc = nlp(text[:5000])
-        return [ent.text for ent in doc.ents if ent.label_ in ("DATE", "TIME")]
+        t = datetime.strptime(raw.upper(), "%I %p")
+        return t.strftime("%I:%M %p")
     except Exception:
+        pass
+    try:
+        t = datetime.strptime(raw, "%H:%M")
+        return t.strftime("%I:%M %p")
+    except Exception:
+        pass
+    return raw
+
+
+def _priority(text: str, typ: str, subtype) -> int:
+    low = _norm(text)
+    if subtype in ("compre", "endsem"):
+        return 5
+    if subtype == "midsem":
+        return 4
+    if any(kw in low for kw in _URGENT_KW):
+        return 3
+    if typ == "deadline":
+        return 3
+    if typ == "exam":
+        return 3
+    return 1
+
+
+def _confirmed(subject_code, user_courses) -> bool:
+    """True if the email's course matches the user's registered courses."""
+    if not user_courses:
+        return True  # no courses set → accept everything
+    if not subject_code:
+        return False  # unrecognised course → needs review
+    code_up = subject_code.upper()
+    for uc in user_courses:
+        uc_up = uc.upper().replace(" ", "")
+        c_up  = code_up.replace(" ", "")
+        if uc_up in c_up or c_up in uc_up:
+            return True
+    return False
+
+
+# ── Main entry point ───────────────────────────────────────────────────────
+
+def extract_events(email_subject: str, email_body: str, email_date, user_courses) -> list:
+    """
+    Returns list of event dicts from one email.
+    Fields: title, date, time, type, subtype, subject, component,
+            description, priority, confirmed
+    """
+    full_text = f"{email_subject}\n{email_body}"
+    low = _norm(full_text)
+
+    # Quick skip: if no date-like or event-like keywords, skip
+    _EVENT_HINTS = [
+        "exam", "quiz", "test", "midsem", "endsem", "compre",
+        "deadline", "due", "submit", "assignment", "schedule",
+        "date", "jan", "feb", "mar", "apr", "may", "jun",
+        "jul", "aug", "sep", "oct", "nov", "dec",
+        r'\d{1,2}/\d{1,2}', r'\d{1,2}-\d{1,2}',
+    ]
+    if not any(re.search(h, low) for h in _EVENT_HINTS):
         return []
 
+    dates = _parse_dates(full_text, email_date)
+    if not dates:
+        return []
 
-def _find_dates(text):
-    found = _spacy_dates(text)
-    if not found:
-        found = [m.group(0) for m in _DATE_RE.finditer(text)]
-    seen, out = set(), []
-    for d in found:
-        key = d.lower().strip()
-        if key not in seen:
-            seen.add(key)
-            out.append(d)
-    return out
+    typ, subtype = classify(full_text)
+    subject_code = detect_subject(full_text)
+    component    = detect_component(full_text)
+    time_str     = _parse_time(full_text)
+    priority     = _priority(full_text, typ, subtype)
+    is_confirmed = _confirmed(subject_code, user_courses)
 
-
-def _context_window(sentences, idx, window=2):
-    start = max(0, idx - window)
-    end = min(len(sentences), idx + window + 1)
-    return " ".join(sentences[start:end])
-
-
-def _build_title(sentence, subject_line, typ, subtype, course, component):
+    # Build a readable title
     parts = []
     if subtype:
         parts.append(subtype.upper())
-    elif typ not in ("other", "event", "meeting", "assignment", "deadline"):
-        parts.append(typ.upper())
-    if course:
-        parts.append(course)
+    if subject_code:
+        parts.append(subject_code)
     if component:
         parts.append(f"[{component}]")
-    base = subject_line.strip()[:80] if subject_line and len(subject_line.strip()) < 80 else sentence[:80]
-    return f"{' — '.join(parts)}: {base}" if parts else base
+    if not parts:
+        parts.append(typ.upper())
+    # Append email subject (trimmed)
+    subj_clean = re.sub(r'^(re|fwd?|fw):\s*', '', email_subject, flags=re.IGNORECASE).strip()
+    if subj_clean:
+        parts.append("—")
+        parts.append(subj_clean[:60])
+    title = " ".join(parts)
 
+    desc = email_body[:200].replace('\n', ' ').strip() if email_body else email_subject
 
-def extract_events(subject: str, body: str, email_date: datetime = None,
-                   user_courses: list = None) -> list[dict]:
-    base = email_date or datetime.now()
     events = []
-    seen_dates: set[str] = set()
-    combined = f"{subject}\n{body}"
-    sentences = _sentences(combined)
-
-    for idx, sent in enumerate(sentences):
-        if not has_keyword(sent):
+    seen_dates = set()
+    for dt in dates[:3]:  # max 3 dates per email
+        ds = dt.strftime("%Y-%m-%d")
+        if ds in seen_dates:
             continue
-
-        typ, subtype = classify(sent)
-        if not subtype:
-            _, subtype = classify(subject)
-        course    = detect_subject(sent) or detect_subject(subject)
-        component = detect_component(sent) or detect_component(subject)
-        ctx       = _context_window(sentences, idx)
-
-        # Confidence: if user gave their courses, mark unrecognised as unconfirmed
-        confirmed = True
-        if user_courses and course:
-            # Check if course roughly matches any user course
-            confirmed = any(
-                course.upper() in uc.upper() or uc.upper() in course.upper()
-                for uc in user_courses
-            )
-        elif user_courses and not course:
-            # No course detected at all — needs review
-            confirmed = False
-
-        date_strings = _find_dates(ctx)
-        if not date_strings:
-            date_strings = _find_dates(combined[:3000])
-
-        for ds in date_strings:
-            parsed = parse_date(ds, base)
-            if not parsed or parsed < datetime.now() - timedelta(days=1):
-                continue
-
-            date_key = parsed.strftime("%Y-%m-%d") + (subtype or typ) + subject[:30]
-            if date_key in seen_dates:
-                continue
-            seen_dates.add(date_key)
-
-            time_m  = _TIME_RE.search(ctx)
-            eff_typ = subtype if subtype in ("quiz", "labtest") else typ
-
-            events.append({
-                "title":     _build_title(sent, subject, typ, subtype, course, component),
-                "date":      parsed.strftime("%Y-%m-%d"),
-                "time":      time_m.group(0).strip() if time_m else None,
-                "type":      eff_typ,
-                "subtype":   subtype,
-                "subject":   course,
-                "component": component,
-                "description": ctx[:300].strip(),
-                "priority":  PRIORITY.get(subtype or eff_typ, 1),
-                "confirmed": confirmed,
-            })
-
-        if not date_strings and has_keyword(subject) and idx == 0:
-            typ2, sub2 = classify(subject)
-            course2    = detect_subject(subject)
-            comp2      = detect_component(subject)
-            key2 = "tbd" + (sub2 or typ2) + subject[:30]
-            if key2 not in seen_dates:
-                seen_dates.add(key2)
-                for ds in _find_dates(body[:5000]):
-                    parsed = parse_date(ds, base)
-                    if parsed and parsed >= datetime.now() - timedelta(days=1):
-                        time_m = _TIME_RE.search(body[:500])
-                        eff2   = sub2 if sub2 in ("quiz", "labtest") else typ2
-                        conf2  = True
-                        if user_courses and course2:
-                            conf2 = any(
-                                course2.upper() in uc.upper() or uc.upper() in course2.upper()
-                                for uc in user_courses
-                            )
-                        elif user_courses and not course2:
-                            conf2 = False
-                        events.append({
-                            "title":     _build_title(sent, subject, typ2, sub2, course2, comp2),
-                            "date":      parsed.strftime("%Y-%m-%d"),
-                            "time":      time_m.group(0).strip() if time_m else None,
-                            "type":      eff2,
-                            "subtype":   sub2,
-                            "subject":   course2,
-                            "component": comp2,
-                            "description": sent[:300].strip(),
-                            "priority":  PRIORITY.get(sub2 or eff2, 1),
-                            "confirmed": conf2,
-                        })
-                        break
+        seen_dates.add(ds)
+        events.append({
+            "title":       title,
+            "date":        ds,
+            "time":        time_str,
+            "type":        typ,
+            "subtype":     subtype,
+            "subject":     subject_code,
+            "component":   component,
+            "description": desc,
+            "priority":    priority,
+            "confirmed":   is_confirmed,
+        })
 
     return events
