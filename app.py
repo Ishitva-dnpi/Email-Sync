@@ -32,6 +32,25 @@ google = oauth.register(
 
 with app.app_context():
     db.create_all()
+    # Auto-migrate: add any missing columns without dropping data
+    _migrate_cols = [
+        ("users",  "onboarded",    "BOOLEAN DEFAULT FALSE"),
+        ("users",  "courses_json", "TEXT DEFAULT '[]'"),
+        ("events", "subtype",      "VARCHAR(32)"),
+        ("events", "subject",      "VARCHAR(64)"),
+        ("events", "component",    "VARCHAR(16)"),
+        ("events", "source_url",   "VARCHAR(512)"),
+        ("events", "confirmed",    "BOOLEAN DEFAULT TRUE"),
+    ]
+    with db.engine.connect() as _conn:
+        for _tbl, _col, _typedef in _migrate_cols:
+            try:
+                _conn.execute(db.text(
+                    f"ALTER TABLE {_tbl} ADD COLUMN {_col} {_typedef}"
+                ))
+                _conn.commit()
+            except Exception:
+                _conn.rollback()  # column already exists — that's fine
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
