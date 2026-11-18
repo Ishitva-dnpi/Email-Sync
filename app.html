@@ -367,10 +367,16 @@ async function loadProfileCourses(){
     if(!el) return;
     if(d.courses&&d.courses.length){
       el.innerHTML=d.courses.map(c=>{
-        const code = typeof c==="object" ? c.code : c;
-        const comps = typeof c==="object" ? (c.components||[]) : ["L","P","T"];
-        const compBadges = comps.map(x=>`<span style="font-size:.65rem;padding:1px 5px;border-radius:6px;background:#ffffff11;color:#888">${x}</span>`).join(" ");
-        return `<span class="ctag">${esc(code)} ${compBadges}</span>`;
+        let code, comps;
+        if(c!==null && typeof c==="object"){
+          code = String(c.code||"");
+          comps = Array.isArray(c.components) ? c.components : ["L","P","T"];
+        } else {
+          code = String(c||"");
+          comps = ["L","P","T"];
+        }
+        const compBadges = comps.map(x=>`<span style="font-size:.65rem;padding:2px 6px;border-radius:6px;background:#ffffff11;color:#888">${x}</span>`).join(" ");
+        return `<span class="ctag" style="display:inline-flex;align-items:center;gap:5px">${esc(code)} ${compBadges}</span>`;
       }).join("");
     } else {
       el.innerHTML=`<span style="color:var(--muted);font-size:.8rem">No courses set — <a href="/onboarding" style="color:var(--accent2)">add them</a></span>`;
